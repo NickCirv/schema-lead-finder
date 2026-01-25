@@ -1,0 +1,18 @@
+# Render.com Blueprint
+# Deploy: Connect GitHub repo → Auto-deploy
+
+services:
+  - type: web
+    name: schema-lead-finder
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run server
+    envVars:
+      - key: APIFY_TOKEN
+        sync: false
+      - key: SCHEMA_AUDIT_API
+        value: https://schema-audit-tool.onrender.com/api/audit
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
