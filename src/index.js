@@ -17,7 +17,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 // Configuration
-const APIFY_TOKEN = process.env.APIFY_TOKEN || 'apify_api_ciMAoXgZY0bXiN9OBgPYctybme9TjY2Jzx1E';
+const APIFY_TOKEN = process.env.APIFY_TOKEN;
 const SCHEMA_AUDIT_API = process.env.SCHEMA_AUDIT_API || 'https://schema-audit-tool.onrender.com/api/audit';
 
 // Initialize Apify client
