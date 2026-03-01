@@ -2,9 +2,10 @@
  * Schema-Missing Business Finder - API Server
  *
  * Endpoints:
- * POST /api/find-leads - Start a new lead generation job
- * GET /api/job/:jobId - Check job status
- * GET /api/job/:jobId/download - Download results
+ * POST /api/find-leads      - Start a new lead generation job (paid)
+ * POST /api/find-leads-free  - Start a free sample job (3 leads, limited data)
+ * GET  /api/job/:jobId       - Check job status
+ * GET  /api/job/:jobId/download - Download results
  */
 
 require('dotenv').config();
@@ -25,9 +26,48 @@ app.use(express.json());
 // In-memory job storage (use Redis in production)
 const jobs = new Map();
 
+// -------------------------------------------------------------------
+// Rate limiting for free tier: max 3 requests per IP per day
+// -------------------------------------------------------------------
+const freeRateLimits = new Map(); // ip -> { count, resetAt }
+
+function cleanupRateLimits() {
+    const now = Date.now();
+    for (const [ip, entry] of freeRateLimits) {
+        if (now >= entry.resetAt) {
+            freeRateLimits.delete(ip);
+        }
+    }
+}
+
+// Cleanup stale entries every hour
+setInterval(cleanupRateLimits, 60 * 60 * 1000);
+
+function checkFreeRateLimit(ip) {
+    const now = Date.now();
+    const entry = freeRateLimits.get(ip);
+
+    if (!entry || now >= entry.resetAt) {
+        // New day or first request
+        const midnight = new Date();
+        midnight.setHours(24, 0, 0, 0);
+        freeRateLimits.set(ip, { count: 1, resetAt: midnight.getTime() });
+        return { allowed: true, remaining: 2 };
+    }
+
+    if (entry.count >= 3) {
+        const retryAfterMs = entry.resetAt - now;
+        const retryAfterMin = Math.ceil(retryAfterMs / 60000);
+        return { allowed: false, remaining: 0, retryAfterMin };
+    }
+
+    entry.count += 1;
+    return { allowed: true, remaining: 3 - entry.count };
+}
+
 /**
  * POST /api/find-leads
- * Start a new lead generation job
+ * Start a new lead generation job (paid tier - full data)
  *
  * Body: { niche: string, location: string, limit?: number, email?: string }
  */
@@ -47,6 +87,7 @@ app.post('/api/find-leads', async (req, res) => {
     jobs.set(jobId, {
         id: jobId,
         status: 'processing',
+        tier: 'paid',
         niche,
         location,
         limit,
@@ -77,7 +118,71 @@ app.post('/api/find-leads', async (req, res) => {
 });
 
 /**
- * Background job processor
+ * POST /api/find-leads-free
+ * Start a free sample job (3 leads, stripped contact details)
+ *
+ * Body: { niche: string, location: string }
+ */
+app.post('/api/find-leads-free', async (req, res) => {
+    const { niche, location } = req.body;
+
+    if (!niche || !location) {
+        return res.status(400).json({
+            error: 'Missing required fields: niche, location'
+        });
+    }
+
+    // Rate limit check
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const rateCheck = checkFreeRateLimit(clientIp);
+
+    if (!rateCheck.allowed) {
+        return res.status(429).json({
+            error: `Free tier limit reached (3 requests per day). Try again in ${rateCheck.retryAfterMin} minutes, or upgrade to a paid plan for unlimited access.`,
+            upgrade: true
+        });
+    }
+
+    // Generate job ID
+    const jobId = crypto.randomUUID();
+
+    // Store job — force limit to 3 and mark as free tier
+    jobs.set(jobId, {
+        id: jobId,
+        status: 'processing',
+        tier: 'free',
+        niche,
+        location,
+        limit: 20, // fetch more to ensure we get 3 valid leads after filtering
+        email: null,
+        createdAt: new Date().toISOString(),
+        progress: 0,
+        results: null,
+        error: null
+    });
+
+    // Return immediately with job ID
+    res.json({
+        success: true,
+        jobId,
+        message: 'Free sample started. Check /api/job/:jobId for status.',
+        estimatedTime: '2-3 minutes',
+        remaining: rateCheck.remaining
+    });
+
+    // Process in background
+    processFreeJob(jobId, niche, location).catch(err => {
+        console.error(`Free job ${jobId} failed:`, err);
+        const job = jobs.get(jobId);
+        if (job) {
+            job.status = 'failed';
+            job.error = err.message;
+        }
+    });
+});
+
+/**
+ * Background job processor (paid tier - full data)
  */
 async function processJob(jobId, niche, location, limit, email) {
     const job = jobs.get(jobId);
@@ -120,9 +225,63 @@ async function processJob(jobId, niche, location, limit, email) {
 
         // TODO: Send email notification if email provided
         if (email) {
-            console.log(`📧 Would send results to ${email}`);
+            console.log(`Would send results to ${email}`);
             // await sendEmailNotification(email, jobId, job.results);
         }
+
+    } catch (error) {
+        job.status = 'failed';
+        job.error = error.message;
+        throw error;
+    }
+}
+
+/**
+ * Background job processor (free tier - limited data)
+ */
+async function processFreeJob(jobId, niche, location) {
+    const job = jobs.get(jobId);
+
+    try {
+        // Step 1: Scrape Google Maps (small batch)
+        job.progress = 10;
+        job.status = 'scraping';
+        const businesses = await scrapeGoogleMaps(niche, location, 20);
+
+        job.progress = 40;
+        job.status = 'auditing';
+
+        // Step 2: Audit schemas
+        const audited = await batchAuditSchemas(businesses);
+
+        job.progress = 80;
+        job.status = 'filtering';
+
+        // Step 3: Filter leads
+        const allLeads = filterLeads(audited);
+
+        // Take only first 3 leads
+        const sampleLeads = allLeads.slice(0, 3);
+
+        // Strip contact details — only keep name, city, missing schema types
+        const strippedLeads = sampleLeads.map(lead => ({
+            name: lead.name || lead.businessName || 'Unknown',
+            city: lead.city || lead.address?.city || '',
+            missingSchemaTypes: lead.missingSchemaTypes || lead.missingSchema || []
+            // Deliberately omitting: website, phone, email, address, rating, reviews
+        }));
+
+        // Store results
+        job.status = 'completed';
+        job.progress = 100;
+        job.results = {
+            totalBusinesses: businesses.length,
+            totalLeads: strippedLeads.length,
+            fullResultsCount: allLeads.length,
+            leads: strippedLeads,
+            upgrade: true
+        };
+        job.completedAt = new Date().toISOString();
 
     } catch (error) {
         job.status = 'failed';
@@ -147,6 +306,7 @@ app.get('/api/job/:jobId', (req, res) => {
         id: job.id,
         status: job.status,
         progress: job.progress,
+        tier: job.tier,
         niche: job.niche,
         location: job.location,
         createdAt: job.createdAt,
@@ -166,6 +326,13 @@ app.get('/api/job/:jobId/download/:format', async (req, res) => {
 
     if (!job) {
         return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (job.tier === 'free') {
+        return res.status(403).json({
+            error: 'Downloads are not available on the free tier. Upgrade to a paid plan.',
+            upgrade: true
+        });
     }
 
     if (job.status !== 'completed') {
@@ -193,209 +360,39 @@ app.get('/health', (req, res) => {
 });
 
 /**
- * Landing page - CirvGreen branded
+ * robots.txt
+ */
+app.get('/robots.txt', (req, res) => {
+    res.type('text/plain');
+    res.send(`User-agent: *\nAllow: /\n\nSitemap: https://schema-lead-finder.onrender.com/sitemap.xml\n`);
+});
+
+/**
+ * sitemap.xml
+ */
+app.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://schema-lead-finder.onrender.com/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+});
+
+/**
+ * Landing page - serve static file
  */
 app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Schema Lead Finder | CirvGreen Digital</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                * { box-sizing: border-box; }
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    max-width: 900px;
-                    margin: 0 auto;
-                    padding: 40px 20px;
-                    background: #f8fafc;
-                    color: #1e293b;
-                    line-height: 1.6;
-                }
-                .header {
-                    text-align: center;
-                    margin-bottom: 40px;
-                }
-                .logo {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 10px;
-                    font-size: 14px;
-                    color: #4CAF50;
-                    font-weight: 600;
-                    margin-bottom: 10px;
-                }
-                h1 {
-                    color: #0f172a;
-                    font-size: 2.5rem;
-                    margin: 0 0 15px 0;
-                }
-                .tagline {
-                    color: #64748b;
-                    font-size: 1.2rem;
-                }
-                .hero-stat {
-                    display: inline-block;
-                    background: linear-gradient(135deg, #4CAF50 0%, #2271b1 100%);
-                    color: white;
-                    padding: 20px 40px;
-                    border-radius: 12px;
-                    margin: 30px 0;
-                }
-                .hero-stat strong { font-size: 2rem; }
-                .card {
-                    background: white;
-                    border-radius: 12px;
-                    padding: 25px;
-                    margin: 20px 0;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                    border: 1px solid #e2e8f0;
-                }
-                .card h3 {
-                    color: #4CAF50;
-                    margin-top: 0;
-                    font-size: 1.1rem;
-                }
-                pre {
-                    background: #0f172a;
-                    color: #e2e8f0;
-                    padding: 20px;
-                    border-radius: 8px;
-                    overflow-x: auto;
-                    font-size: 13px;
-                }
-                .pricing {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 20px;
-                    margin: 30px 0;
-                }
-                .price-card {
-                    background: white;
-                    border: 2px solid #e2e8f0;
-                    border-radius: 12px;
-                    padding: 25px;
-                    text-align: center;
-                }
-                .price-card.featured {
-                    border-color: #4CAF50;
-                    position: relative;
-                }
-                .price-card.featured::before {
-                    content: 'POPULAR';
-                    position: absolute;
-                    top: -12px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #4CAF50;
-                    color: white;
-                    padding: 4px 12px;
-                    border-radius: 20px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-                .price { font-size: 2rem; font-weight: 700; color: #0f172a; }
-                .price span { font-size: 1rem; color: #64748b; }
-                .btn {
-                    display: inline-block;
-                    background: #4CAF50;
-                    color: white;
-                    padding: 12px 30px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    margin-top: 15px;
-                }
-                .btn:hover { background: #3d8b40; }
-                .footer {
-                    text-align: center;
-                    margin-top: 50px;
-                    padding-top: 30px;
-                    border-top: 1px solid #e2e8f0;
-                    color: #64748b;
-                }
-                .footer a { color: #4CAF50; }
-                code {
-                    background: #f1f5f9;
-                    padding: 2px 8px;
-                    border-radius: 4px;
-                    font-size: 13px;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <div class="logo">
-                    <span>🌿</span> CIRVGREEN DIGITAL
-                </div>
-                <h1>Schema Lead Finder</h1>
-                <p class="tagline">Find businesses missing schema markup.<br>Qualified leads, delivered automatically.</p>
-                <div class="hero-stat">
-                    <strong>60-80%</strong><br>of local businesses have NO schema
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>🚀 How It Works</h3>
-                <ol>
-                    <li><strong>You specify</strong> a niche + location (e.g., "dentist chicago")</li>
-                    <li><strong>We scrape</strong> Google Maps for businesses</li>
-                    <li><strong>We audit</strong> each website for schema markup</li>
-                    <li><strong>You receive</strong> a CSV of qualified leads with verified issues</li>
-                </ol>
-            </div>
-
-            <div class="card">
-                <h3>📡 API Endpoint</h3>
-                <p><code>POST /api/find-leads</code></p>
-                <pre>{
-  "niche": "dentist",
-  "location": "chicago",
-  "limit": 100,
-  "email": "you@email.com"
-}</pre>
-                <p style="margin-top:15px;color:#64748b;">
-                    Returns a job ID. Poll <code>GET /api/job/:jobId</code> for status.
-                    Download results with <code>GET /api/job/:jobId/download/csv</code>
-                </p>
-            </div>
-
-            <h2 style="text-align:center;margin-top:50px;">Pricing</h2>
-            <div class="pricing">
-                <div class="price-card">
-                    <h4>One-Time</h4>
-                    <div class="price">$99</div>
-                    <p>200+ leads<br>Single niche/city<br>CSV delivery</p>
-                </div>
-                <div class="price-card featured">
-                    <h4>Monthly</h4>
-                    <div class="price">$149<span>/mo</span></div>
-                    <p>Weekly refresh<br>Same niche/city<br>Email delivery</p>
-                </div>
-                <div class="price-card">
-                    <h4>Enterprise</h4>
-                    <div class="price">$499<span>/mo</span></div>
-                    <p>5 niches<br>Weekly refresh<br>Priority support</p>
-                </div>
-            </div>
-
-            <div style="text-align:center;margin-top:40px;">
-                <a href="mailto:nick@cirvgreen.com?subject=Schema Lead Finder Inquiry" class="btn">Get Started</a>
-            </div>
-
-            <div class="footer">
-                <p>Built by <a href="https://cirvgreen.com">CirvGreen Digital</a></p>
-                <p>Also check out <a href="https://wordpress.org/plugins/cirv-box/">Cirv Box</a> - Free Schema Plugin for WordPress</p>
-            </div>
-        </body>
-        </html>
-    `);
+    res.sendFile(path.join(__dirname, '..', 'landing.html'));
 });
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Schema-Missing Business Finder API running on http://localhost:${PORT}`);
+    console.log(`Schema-Missing Business Finder API running on http://localhost:${PORT}`);
 });
 
 module.exports = app;

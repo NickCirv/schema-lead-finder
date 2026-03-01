@@ -9,6 +9,67 @@
         .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        .blurred-row {
+            filter: blur(5px);
+            user-select: none;
+            pointer-events: none;
+        }
+        .upgrade-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            z-index: 10;
+        }
+        .template-card {
+            position: relative;
+        }
+        .copy-toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-toast.show {
+            opacity: 1;
+        }
+        .result-table th {
+            background: #f1f5f9;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+        }
+        .result-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .spinner {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #7c3aed;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -22,8 +83,8 @@
                 Automated lead generation for SEO professionals.<br>
                 Get businesses with missing schema markup delivered to your inbox.
             </p>
-            <a href="#pricing" class="bg-white text-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition">
-                Get Started → $99
+            <a href="#free-trial" class="bg-white text-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition">
+                Try Free &mdash; 3 Sample Leads
             </a>
         </div>
     </section>
@@ -34,21 +95,21 @@
         <div class="grid md:grid-cols-3 gap-8">
             <div class="text-center">
                 <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">1️⃣</span>
+                    <span class="text-2xl font-bold text-purple-600">1</span>
                 </div>
                 <h3 class="font-bold text-xl mb-2">Tell Us Your Niche</h3>
                 <p class="text-gray-600">Enter your target industry and location. "Dentists in Chicago" or "Plumbers in Austin"</p>
             </div>
             <div class="text-center">
                 <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">2️⃣</span>
+                    <span class="text-2xl font-bold text-purple-600">2</span>
                 </div>
                 <h3 class="font-bold text-xl mb-2">We Audit Every Site</h3>
                 <p class="text-gray-600">Our system scrapes 500+ businesses and checks each website for schema markup.</p>
             </div>
             <div class="text-center">
                 <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">3️⃣</span>
+                    <span class="text-2xl font-bold text-purple-600">3</span>
                 </div>
                 <h3 class="font-bold text-xl mb-2">Get Qualified Leads</h3>
                 <p class="text-gray-600">Receive a CSV with 200+ businesses missing schema - complete with contact info.</p>
@@ -76,33 +137,101 @@
         </div>
     </section>
 
+    <!-- Free Trial Section -->
+    <section id="free-trial" class="py-16 max-w-4xl mx-auto px-6">
+        <div class="text-center mb-10">
+            <h2 class="text-3xl font-bold mb-3">Try It Free</h2>
+            <p class="text-gray-600 text-lg">Get 3 sample leads for any niche &mdash; no payment required</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-8 max-w-xl mx-auto">
+            <form id="freeTrialForm" class="space-y-4">
+                <div>
+                    <label for="freeNiche" class="block text-sm font-semibold text-gray-700 mb-1">Niche / Industry</label>
+                    <input type="text" id="freeNiche" placeholder="e.g. Dentist, Plumber, Lawyer" required
+                        class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+                </div>
+                <div>
+                    <label for="freeLocation" class="block text-sm font-semibold text-gray-700 mb-1">Location</label>
+                    <input type="text" id="freeLocation" placeholder="e.g. Chicago, Austin TX, London" required
+                        class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none">
+                </div>
+                <button type="submit" id="freeTrialBtn"
+                    class="w-full bg-purple-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-purple-700 transition">
+                    Get Free Sample
+                </button>
+            </form>
+
+            <div id="freeTrialLoading" class="hidden text-center py-8">
+                <div class="spinner mx-auto mb-3"></div>
+                <p class="text-gray-600">Scanning businesses&hellip; this may take a moment</p>
+            </div>
+
+            <div id="freeTrialError" class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"></div>
+        </div>
+
+        <!-- Free Results -->
+        <div id="freeResults" class="hidden mt-10">
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h3 class="font-bold text-lg">Sample Results</h3>
+                    <span id="freeResultsMeta" class="text-sm text-gray-500"></span>
+                </div>
+                <div class="overflow-x-auto relative">
+                    <table class="w-full result-table">
+                        <thead>
+                            <tr>
+                                <th>Business Name</th>
+                                <th>City</th>
+                                <th>Missing Schema</th>
+                                <th>Website</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                            </tr>
+                        </thead>
+                        <tbody id="freeResultsBody"></tbody>
+                    </table>
+                    <div id="blurOverlay" class="upgrade-overlay hidden">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gray-800 mb-2">Unlock Full Results</div>
+                            <p class="text-gray-600 mb-4" id="overlayCount">200+ leads with full contact details</p>
+                            <a href="#pricing" class="inline-block bg-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition">
+                                View Plans &rarr;
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- What You Get -->
     <section class="py-16 max-w-4xl mx-auto px-6">
         <h2 class="text-3xl font-bold text-center mb-12">What's Included</h2>
         <div class="bg-white rounded-xl shadow-lg p-8">
             <ul class="space-y-4">
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>Business Name & Website</strong> - Verified, active businesses</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>Phone Number & Address</strong> - Direct contact info</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>Google Rating & Reviews</strong> - Prioritize high-value leads</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>Schema Status</strong> - Confirmed missing or broken markup</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>Specific Issues</strong> - Know exactly what's wrong</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="text-green-500 mr-3">✓</span>
+                    <span class="text-green-500 mr-3 mt-0.5 font-bold">&#10003;</span>
                     <span><strong>CSV + JSON Export</strong> - Import directly to your CRM</span>
                 </li>
             </ul>
@@ -119,12 +248,14 @@
                     <h3 class="text-xl font-bold mb-2">One-Time</h3>
                     <div class="text-4xl font-bold mb-4">$99</div>
                     <ul class="space-y-2 mb-8 text-gray-600">
-                        <li>✓ 1 niche + 1 location</li>
-                        <li>✓ 200+ qualified leads</li>
-                        <li>✓ CSV + JSON download</li>
-                        <li>✓ Delivered in 24 hours</li>
+                        <li>&#10003; 1 niche + 1 location</li>
+                        <li>&#10003; 200+ qualified leads</li>
+                        <li>&#10003; CSV + JSON download</li>
+                        <li>&#10003; Delivered in 24 hours</li>
+                        <li>&#10003; Outreach templates included</li>
                     </ul>
-                    <a href="#" class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition paddle-checkout" data-product="one-time">
+                    <a href="https://buy.stripe.com/PLACEHOLDER_ONETIME" target="_blank" rel="noopener"
+                        class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition">
                         Buy Now
                     </a>
                 </div>
@@ -136,12 +267,14 @@
                     <h3 class="text-xl font-bold mb-2">Monthly</h3>
                     <div class="text-4xl font-bold mb-4">$149<span class="text-lg font-normal">/mo</span></div>
                     <ul class="space-y-2 mb-8 text-gray-600">
-                        <li>✓ 1 niche + 1 location</li>
-                        <li>✓ <strong>Weekly refresh</strong></li>
-                        <li>✓ New leads every week</li>
-                        <li>✓ Priority support</li>
+                        <li>&#10003; 1 niche + 1 location</li>
+                        <li>&#10003; <strong>Weekly refresh</strong></li>
+                        <li>&#10003; New leads every week</li>
+                        <li>&#10003; Priority support</li>
+                        <li>&#10003; Outreach templates included</li>
                     </ul>
-                    <a href="#" class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition paddle-checkout" data-product="monthly">
+                    <a href="https://buy.stripe.com/PLACEHOLDER_MONTHLY" target="_blank" rel="noopener"
+                        class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition">
                         Subscribe
                     </a>
                 </div>
@@ -150,14 +283,83 @@
                     <h3 class="text-xl font-bold mb-2">Enterprise</h3>
                     <div class="text-4xl font-bold mb-4">$499<span class="text-lg font-normal">/mo</span></div>
                     <ul class="space-y-2 mb-8 text-gray-600">
-                        <li>✓ <strong>5 niches/locations</strong></li>
-                        <li>✓ Weekly refresh</li>
-                        <li>✓ API access</li>
-                        <li>✓ White-label reports</li>
+                        <li>&#10003; <strong>5 niches/locations</strong></li>
+                        <li>&#10003; Weekly refresh</li>
+                        <li>&#10003; API access</li>
+                        <li>&#10003; White-label reports</li>
+                        <li>&#10003; Outreach templates included</li>
                     </ul>
-                    <a href="#" class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition paddle-checkout" data-product="enterprise">
+                    <a href="https://buy.stripe.com/PLACEHOLDER_ENTERPRISE" target="_blank" rel="noopener"
+                        class="block text-center bg-purple-600 text-white py-3 rounded-lg font-bold hover:bg-purple-700 transition">
                         Subscribe
                     </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Outreach Templates -->
+    <section class="py-16 max-w-4xl mx-auto px-6">
+        <div class="text-center mb-10">
+            <h2 class="text-3xl font-bold mb-3">Done-for-You Outreach Templates Included</h2>
+            <p class="text-gray-600 text-lg">Copy, paste, send. Start closing leads the same day.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Template 1 -->
+            <div class="template-card bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="bg-purple-600 text-white px-6 py-3 flex items-center justify-between">
+                    <span class="font-bold">Template 1: Schema Audit Offer</span>
+                    <button onclick="copyTemplate('template1')" class="text-sm bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition">
+                        Copy
+                    </button>
+                </div>
+                <div class="p-6">
+                    <pre id="template1" class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg leading-relaxed" style="font-family: inherit;">Subject: Free Schema Audit for {{Business Name}}
+
+Hi {{First Name}},
+
+I was reviewing local {{Niche}} businesses in {{City}} and noticed that {{Business Name}} is missing structured data (schema markup) on your website.
+
+This is costing you visibility in Google search results -- rich snippets, star ratings, and enhanced listings that your competitors are already getting.
+
+I'd like to offer you a free, no-obligation schema audit that shows exactly what's missing and how to fix it. Takes 5 minutes to review.
+
+Would you be open to a quick look? I can send the report over by end of day.
+
+Best,
+{{Your Name}}
+{{Your Company}}</pre>
+                </div>
+            </div>
+
+            <!-- Template 2 -->
+            <div class="template-card bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="bg-purple-600 text-white px-6 py-3 flex items-center justify-between">
+                    <span class="font-bold">Template 2: Missing Schema Alert</span>
+                    <button onclick="copyTemplate('template2')" class="text-sm bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition">
+                        Copy
+                    </button>
+                </div>
+                <div class="p-6">
+                    <pre id="template2" class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg leading-relaxed" style="font-family: inherit;">Subject: {{Business Name}} is invisible to Google's rich results
+
+Hi {{First Name}},
+
+Quick heads-up: I ran a technical SEO scan on {{Business Name}}'s website and found that it's missing critical schema markup, specifically {{Missing Schema Types}}.
+
+What this means in practice:
+- Your business won't show star ratings in Google
+- No rich snippets for your services or hours
+- Competitors with schema get 30% more clicks
+
+The fix is straightforward and I specialize in exactly this. I've helped {{Number}} businesses in {{City}} add proper schema markup, typically within 48 hours.
+
+Happy to walk you through the findings -- no cost, no commitment. Just reply and I'll send over the audit.
+
+Cheers,
+{{Your Name}}
+{{Your Company}}</pre>
                 </div>
             </div>
         </div>
@@ -177,7 +379,11 @@
             </div>
             <div>
                 <h3 class="font-bold text-lg mb-2">How do I use these leads?</h3>
-                <p class="text-gray-600">Import into your CRM, run cold email campaigns, or use for cold calling. Each lead has a verified SEO issue you can solve.</p>
+                <p class="text-gray-600">Import into your CRM, run cold email campaigns, or use for cold calling. Each lead has a verified SEO issue you can solve. We even include ready-to-send outreach templates.</p>
+            </div>
+            <div>
+                <h3 class="font-bold text-lg mb-2">What does the free sample include?</h3>
+                <p class="text-gray-600">You get 3 real leads with business name, city, and missing schema types. Full contact details (website, phone, email) are available on paid plans.</p>
             </div>
             <div>
                 <h3 class="font-bold text-lg mb-2">Can I resell this data?</h3>
@@ -191,27 +397,176 @@
         <div class="max-w-4xl mx-auto px-6 text-center">
             <h2 class="text-3xl font-bold mb-4">Stop Cold Calling. Start Closing.</h2>
             <p class="text-xl mb-8 opacity-90">Get 200+ pre-qualified leads with verified SEO issues.</p>
-            <a href="#pricing" class="bg-white text-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition">
-                Get Started → $99
-            </a>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="#free-trial" class="bg-white text-purple-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition">
+                    Try Free Sample
+                </a>
+                <a href="#pricing" class="border-2 border-white text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-white/10 transition">
+                    View Plans &rarr;
+                </a>
+            </div>
         </div>
     </section>
 
     <!-- Footer -->
     <footer class="py-8 text-center text-gray-600">
-        <p>© 2026 Cirvgreen. All rights reserved.</p>
+        <p>&copy; 2026 Cirvgreen. All rights reserved.</p>
         <p class="mt-2">Questions? <a href="mailto:nick@cirvgreen.com" class="text-purple-600">nick@cirvgreen.com</a></p>
     </footer>
 
-    <!-- Paddle Checkout (placeholder - replace with real Paddle.js) -->
+    <!-- Copy Toast -->
+    <div id="copyToast" class="copy-toast">Copied to clipboard</div>
+
     <script>
-        // TODO: Replace with real Paddle checkout
-        document.querySelectorAll('.paddle-checkout').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const product = e.target.dataset.product;
-                alert(`Paddle checkout for: ${product}\n\nReplace this with real Paddle.js integration.`);
-                // Paddle.Checkout.open({ product: PADDLE_PRODUCT_ID });
+        var API_BASE = window.location.origin;
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function copyTemplate(id) {
+            var el = document.getElementById(id);
+            var text = el.textContent;
+            navigator.clipboard.writeText(text).then(function() {
+                var toast = document.getElementById('copyToast');
+                toast.classList.add('show');
+                setTimeout(function() { toast.classList.remove('show'); }, 2000);
+            });
+        }
+
+        function createCell(text, classes) {
+            var td = document.createElement('td');
+            td.textContent = text;
+            if (classes) td.className = classes;
+            return td;
+        }
+
+        function renderFreeResults(data) {
+            var results = document.getElementById('freeResults');
+            var tbody = document.getElementById('freeResultsBody');
+            var meta = document.getElementById('freeResultsMeta');
+            var overlay = document.getElementById('blurOverlay');
+            var overlayCount = document.getElementById('overlayCount');
+
+            var leads = (data.results && data.results.leads) ? data.results.leads : [];
+            var fullCount = (data.results && data.results.fullResultsCount) ? data.results.fullResultsCount : 0;
+
+            meta.textContent = 'Showing ' + leads.length + ' of ' + fullCount + '+ leads';
+
+            while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+            leads.forEach(function(lead) {
+                var tr = document.createElement('tr');
+
+                tr.appendChild(createCell(lead.name || lead.businessName || '-', 'font-medium'));
+                tr.appendChild(createCell(lead.city || '-'));
+
+                var schemaTypes = lead.missingSchemaTypes || lead.missingSchema || [];
+                var schemaCell = document.createElement('td');
+                var schemaSpan = document.createElement('span');
+                schemaSpan.className = 'text-red-600 text-sm';
+                schemaSpan.textContent = schemaTypes.join(', ') || 'None detected';
+                schemaCell.appendChild(schemaSpan);
+                tr.appendChild(schemaCell);
+
+                tr.appendChild(createCell('example.com', 'blurred-row text-gray-400'));
+                tr.appendChild(createCell('(555) 123-4567', 'blurred-row text-gray-400'));
+                tr.appendChild(createCell('info@example.com', 'blurred-row text-gray-400'));
+
+                tbody.appendChild(tr);
+            });
+
+            for (var i = 0; i < 2; i++) {
+                var tr = document.createElement('tr');
+                tr.className = 'blurred-row';
+                tr.appendChild(createCell('Sample Business ' + (i + 4)));
+                tr.appendChild(createCell('City Name'));
+                tr.appendChild(createCell('LocalBusiness, Organization'));
+                tr.appendChild(createCell('website.com'));
+                tr.appendChild(createCell('(555) 987-6543'));
+                tr.appendChild(createCell('contact@site.com'));
+                tbody.appendChild(tr);
+            }
+
+            overlay.classList.remove('hidden');
+            overlayCount.textContent = fullCount + '+ leads with full contact details available';
+
+            results.classList.remove('hidden');
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function pollJob(jobId) {
+            var attempts = 0;
+            var maxAttempts = 120;
+
+            return new Promise(function(resolve, reject) {
+                function check() {
+                    if (attempts >= maxAttempts) {
+                        reject(new Error('Timed out waiting for results'));
+                        return;
+                    }
+                    attempts++;
+                    setTimeout(function() {
+                        fetch(API_BASE + '/api/job/' + jobId)
+                            .then(function(res) { return res.json(); })
+                            .then(function(data) {
+                                if (data.status === 'completed') {
+                                    resolve(data);
+                                } else if (data.status === 'failed') {
+                                    reject(new Error(data.error || 'Job failed'));
+                                } else {
+                                    check();
+                                }
+                            })
+                            .catch(function(err) { reject(err); });
+                    }, 3000);
+                }
+                check();
+            });
+        }
+
+        document.getElementById('freeTrialForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            var niche = document.getElementById('freeNiche').value.trim();
+            var location = document.getElementById('freeLocation').value.trim();
+            if (!niche || !location) return;
+
+            var form = document.getElementById('freeTrialForm');
+            var loading = document.getElementById('freeTrialLoading');
+            var errorEl = document.getElementById('freeTrialError');
+            var resultsEl = document.getElementById('freeResults');
+
+            form.classList.add('hidden');
+            loading.classList.remove('hidden');
+            errorEl.classList.add('hidden');
+            resultsEl.classList.add('hidden');
+
+            fetch(API_BASE + '/api/find-leads-free', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ niche: niche, location: location })
+            })
+            .then(function(res) {
+                return res.json().then(function(data) {
+                    if (!res.ok) throw new Error(data.error || 'Something went wrong');
+                    return data;
+                });
+            })
+            .then(function(data) {
+                return pollJob(data.jobId);
+            })
+            .then(function(result) {
+                loading.classList.add('hidden');
+                renderFreeResults(result);
+            })
+            .catch(function(err) {
+                loading.classList.add('hidden');
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('hidden');
+                form.classList.remove('hidden');
             });
         });
     </script>
