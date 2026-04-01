@@ -1,3 +1,5 @@
+![Banner](banner.svg)
+
 # Schema-Missing Business Finder - MCP Automated PRD
 
 **Created:** 2026-01-23
