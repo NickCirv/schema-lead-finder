@@ -1,199 +1,136 @@
-![Banner](banner.svg)
+![schema-lead-finder — scrape Google Maps, audit Schema.org markup, export qualified SEO leads as CSV + JSON](assets/banner.png)
 
-# Schema-Missing Business Finder - MCP Automated PRD
+<div align="center">
 
-**Created:** 2026-01-23
-**Category:** MCP-AUTOMATED / Lead Generation
-**Status:** 🔴 NEW - High Priority
-**Priority:** CRITICAL - Build This Week
+**Find the businesses that need your SEO services before you pick up the phone.**
 
----
+![license](https://img.shields.io/badge/license-MIT-blue?labelColor=0B0A09)
+![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen?labelColor=0B0A09)
+![export](https://img.shields.io/badge/export-CSV%20%2B%20JSON-FB923C?labelColor=0B0A09)
+![pipeline](https://img.shields.io/badge/pipeline-Google%20Maps%20%E2%86%92%20schema%20audit%20%E2%86%92%20leads-FB923C?labelColor=0B0A09)
 
-## Quick Reference
-
-**What It Is:** Automated pipeline that finds businesses without proper schema markup and delivers qualified leads
-
-**Revenue:** $1,500-4,000/month (15-40 customers at $99/mo)
-
-**Build Time:** 4 hours (one-time)
-
-**Automation Level:** 95% automated
-
-**MCP Tools:** `Apify Google Maps Scraper` + `Schema Audit Tool` + Email delivery
+</div>
 
 ---
 
-## How It Works
+60–80% of local businesses have no Schema.org markup. `schema-lead-finder` automates the prospecting pipeline: scrape Google Maps for any niche and city via Apify, audit every website for structured data, filter for the ones with missing or broken schema, and export a ranked lead list — sorted by review count so the highest-value prospects land at the top.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ AUTOMATED PIPELINE                                               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│ 1. INPUT: Customer specifies niche + location                    │
-│    Example: "dentist chicago" or "plumber austin"                │
-│                                                                  │
-│ 2. SCRAPE: Apify Google Maps Scraper                            │
-│    → Returns 500-2000 businesses with:                          │
-│      • Business name                                             │
-│      • Website URL                                               │
-│      • Phone number                                              │
-│      • Address                                                   │
-│      • Rating & reviews                                          │
-│                                                                  │
-│ 3. AUDIT: Schema Audit Tool (batch processing)                   │
-│    → Check each website for schema markup                        │
-│    → Flag: Missing, Broken, Incomplete, Good                     │
-│                                                                  │
-│ 4. FILTER: Keep only leads with schema issues                    │
-│    → Typically 60-80% of businesses have NO schema               │
-│                                                                  │
-│ 5. ENRICH: Add business size indicators                          │
-│    → Review count (more reviews = bigger business)               │
-│    → Rating (higher rating = better lead quality)                │
-│                                                                  │
-│ 6. DELIVER: Send to customer                                     │
-│    → CSV/Excel with all lead data                                │
-│    → Weekly automated refresh option                             │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+═══════════════════════════════════════════════════════
+  SCHEMA-MISSING BUSINESS FINDER
+═══════════════════════════════════════════════════════
+  Niche:    dentist
+  Location: chicago
+  Limit:    100 businesses
+═══════════════════════════════════════════════════════
+
+🔍 Scraping Google Maps for "dentist" in "chicago"...
+✅ Found 94 businesses
+
+🔬 Auditing 94 websites for schema markup...
+   Progress: 94/94 (100%)
+✅ Schema audits complete
+
+📊 Results:
+   Total businesses:       94
+   Missing/broken schema:  71 (76%)
+
+📁 Output saved to:
+   output/leads-dentist-chicago-2026-06-18.csv
+   output/leads-dentist-chicago-2026-06-18.json
+
+✅ Pipeline complete!
+
+💰 71 qualified leads ready for outreach
 ```
 
----
+## Install
 
-## Implementation Plan
-
-### Phase 1: Core Build (2 hours)
+No npm account needed — runs straight from GitHub:
 
 ```bash
-# Step 1: Test Apify Google Maps Scraper
-# Use call-actor with apify/google-maps-scraper
-# Input: { "searchStringsArray": ["dentist chicago"], "maxCrawledPlaces": 100 }
-
-# Step 2: Export results to CSV
-# Filter for entries with website URLs
-
-# Step 3: Batch schema audit
-# Loop through URLs with Schema Audit Tool API
-# Output: URL, has_schema, schema_types, issues
-
-# Step 4: Combine data
-# Merge Maps data + Audit results
-# Filter for schema issues only
+npx github:NickCirv/schema-lead-finder
 ```
 
-### Phase 2: Automation Layer (1 hour)
+Requires an `APIFY_TOKEN` environment variable for the Google Maps scraper.
 
-- Create n8n workflow or cron job
-- Input: niche + location from customer dashboard
-- Auto-run weekly for subscription customers
-- Email delivery with formatted report
+## Usage
 
-### Phase 3: Customer Interface (1 hour)
+```bash
+# Basic: niche + location, up to 100 businesses
+node src/index.js "dentist" "chicago"
 
-- Simple order form (Stripe + Typeform)
-- Customer enters: niche, location, email
-- Automated fulfillment within 24 hours
-- Upsell: Weekly refresh subscription
+# Custom limit
+node src/index.js "plumber" "austin" --limit 50
 
----
+# Run the REST API server (port 3002)
+node src/server.js
+```
 
-## Pricing
+| Argument / Flag | Description |
+|----------------|-------------|
+| `<niche>` | Business type to search (e.g. `"dentist"`, `"plumber"`) |
+| `<location>` | City or region (e.g. `"chicago"`, `"austin tx"`) |
+| `--limit <N>` | Max businesses to scrape (default: 100) |
 
-| Tier | Price | Deliverable | Target Customer |
-|------|-------|-------------|-----------------|
-| **One-Time** | $99 | 200+ leads, single niche/city | Freelance SEOs |
-| **Monthly** | $149/mo | Weekly refresh, same niche | SEO agencies |
-| **Enterprise** | $499/mo | 5 niches, weekly refresh | Large agencies |
+### Environment variables
 
----
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APIFY_TOKEN` | Yes | Apify API token for Google Maps Scraper |
+| `SCHEMA_AUDIT_API` | No | Override the schema audit endpoint (default: hosted Render instance) |
 
-## Target Market
+## How the pipeline works
 
-**Primary Customers:**
-- SEO freelancers needing prospecting lists
-- Digital marketing agencies
-- Web development shops selling SEO add-ons
-- Schema implementation consultants (your competition = your customers)
+```
+Google Maps (Apify)
+  → businesses with websites: name, address, phone, rating, reviews
+      ↓
+Schema audit API (batch, 5 concurrent)
+  → hasSchema, schemaTypes, issues, score
+      ↓
+Filter: no schema OR score < 50 OR any issues
+  → ranked by review count (high-volume businesses first)
+      ↓
+CSV + JSON export
+  → output/leads-<niche>-<location>-<date>.csv / .json
+```
 
-**Pain Points:**
-- Manual prospecting is tedious (hours per lead)
-- Don't know which businesses need schema help
-- Need qualified leads with verified issues
-- Want to focus on selling, not prospecting
+## Output fields
 
-**Value Proposition:**
-"Stop cold calling. Get 200+ pre-qualified leads with verified schema issues delivered to your inbox every week."
+| Field | Description |
+|-------|-------------|
+| `Name` | Business name |
+| `Website` | Verified URL |
+| `Phone` | Contact number |
+| `Address` | Full address |
+| `Rating` | Google Maps rating |
+| `Reviews` | Review count (used for ranking) |
+| `Schema Status` | `NO SCHEMA` or schema types found |
+| `Issues` | Audit issues list |
 
----
+## REST API server
 
-## Marketing
+`node src/server.js` starts an Express server on port 3002 with async job processing:
 
-**Launch Strategy:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/find-leads` | POST | Start a full lead generation job |
+| `/api/find-leads-free` | POST | Free sample (3 leads, rate-limited) |
+| `/api/job/:jobId` | GET | Poll job status and progress |
+| `/api/job/:jobId/download/:format` | GET | Download `csv` or `json` results |
+| `/health` | GET | Health check |
 
-1. **Reddit r/SEO** - Post: "I built a tool that finds businesses without schema markup. First 10 agencies get lifetime access for feedback."
+Jobs return immediately with a `jobId`; poll the status endpoint to track scraping → auditing → filtering → report generation.
 
-2. **SEO Twitter** - Share anonymized stats: "Analyzed 500 dentists in Chicago. 78% have NO schema markup. That's $X in potential revenue for SEO agencies."
+## What it is NOT
 
-3. **LinkedIn** - Target SEO agency owners with case study: "How I generated 200 qualified leads in 10 minutes"
-
-**First 10 Customers:**
-- Offer free trial: 50 leads in their niche
-- If they close 1 deal, they'll subscribe forever
-
----
-
-## Success Metrics
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Lead accuracy | >95% | Schema issues verified |
-| Delivery time | <24h | From order to inbox |
-| Customer retention | >80% | Monthly subscribers |
-| Lead-to-close ratio | >5% | Customer feedback |
-
----
-
-## Technical Requirements
-
-**Apify Actor:** `apify/google-maps-scraper`
-- Cost: ~$5 per 1000 places
-- Speed: 500 places in ~10 minutes
-
-**Schema Audit Tool API:**
-- Your existing tool
-- Batch endpoint needed (or loop)
-
-**Delivery:**
-- Email (SendGrid/Resend)
-- CSV attachment
-- Optional: Google Sheets auto-update
+- **Not a real-time monitoring tool.** Run it per-campaign when you need fresh prospecting lists — it is not a continuous watcher.
+- **Not a replacement for manual qualification.** The filter catches missing and low-scoring schema; always verify the lead before outreach.
+- **Not zero-cost to run.** The Apify Google Maps Scraper has per-place pricing (~$5 per 1,000 places). Budget accordingly.
 
 ---
 
-## Risks & Mitigations
-
-| Risk | Mitigation |
-|------|------------|
-| Apify rate limits | Batch requests, respect limits |
-| Schema audit slow | Parallel processing, caching |
-| Lead quality concerns | Guarantee accuracy, refund policy |
-| Competition copies | Speed to market, relationships |
-
----
-
-## Next Steps
-
-1. [ ] Test Apify Google Maps Scraper with sample query
-2. [ ] Build batch schema audit script
-3. [ ] Create data merge + filter logic
-4. [ ] Set up Stripe payment link
-5. [ ] Create order form (Typeform/Tally)
-6. [ ] Test full pipeline end-to-end
-7. [ ] Launch to r/SEO for first customers
-
----
-
-**Status:** 🔴 NEW → 🟡 Building → ✅ Launched → 💰 Profitable
-
-**Last Updated:** 2026-01-23
+<div align="center">
+<sub>Node 18+ · MIT · by <a href="https://github.com/NickCirv">NickCirv</a></sub>
+</div>
