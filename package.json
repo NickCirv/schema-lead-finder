@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/index.js",
     "server": "node src/server.js",
-    "test": "node src/index.js dentist chicago --limit 10",
+    "test": "node --test",
     "demo": "node src/index.js 'plumber' 'austin' --limit 25"
   },
   "keywords": [
@@ -29,6 +29,6 @@
     "dotenv": "^16.3.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20"
   }
 }
